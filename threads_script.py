@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 import sqlite3
 import threading
 from queue import Queue
@@ -7,8 +8,6 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-QUEUE_SIZE = 10
-TOTAL_TASKS = 1000
 conn = None
 
 def create_database():
@@ -29,10 +28,10 @@ def fetch_tasks(limit):
     tasks.reverse()
     return tasks
 
-def insert_tasks():
+def insert_tasks(total_tasks):
     # Insert tasks in db
     c = conn.cursor()
-    for i in range(TOTAL_TASKS):
+    for i in range(total_tasks):
         c.execute(f"INSERT INTO tasks (task_name) VALUES ('Task {i+1}')")
 
     conn.commit()
@@ -49,23 +48,26 @@ def worker(task_queue):
             task_queue.task_done()
 
 def main():
-    global TOTAL_TASKS, QUEUE_SIZE
+    parser = argparse.ArgumentParser(description='Multithreaded task execution')
+    parser.add_argument('--threads', type=int, default=10, help='Number of worker threads')
+    parser.add_argument('--tasks', type=int, default=1000, help='Total number of tasks')
+    args = parser.parse_args()
 
     # Queue init
-    task_queue = Queue(maxsize=QUEUE_SIZE)
+    task_queue = Queue(maxsize=args.threads)
 
     create_database()
 
-    insert_tasks()
+    insert_tasks(args.tasks)
 
     # Ejecucion de los hilos
-    for _ in range(QUEUE_SIZE):
+    for _ in range(args.threads):
         t = threading.Thread(target=worker, args=(task_queue,))
         t.daemon = True
         t.start()
 
     # Fetch tasks from db and add them to queue
-    tasks = fetch_tasks(TOTAL_TASKS)
+    tasks = fetch_tasks(args.tasks)
     for task in tasks:
         task_queue.put(task)
 
